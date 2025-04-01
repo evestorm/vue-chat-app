@@ -14,6 +14,8 @@ const hasMore = ref(true)
 const messageLimit = 50
 const oldestMessageId = ref(null)
 const newestMessageId = ref(null)
+const contacts = ref([])
+const selectedContact = ref(null)
 
 // 引用
 const scroller = ref(null)
@@ -26,110 +28,123 @@ const newMessage = ref('')
 // 准备滚动位置
 const prepareScroll = () => {
   if (scroller.value) {
-    const el = scroller.value.$el
-    previousScrollHeightMinusTop.value = el.scrollHeight - el.scrollTop
+    const el = scroller.value.$el;
+    previousScrollHeightMinusTop.value = el.scrollHeight - el.scrollTop;
   }
-}
+};
 
 // 恢复滚动位置
 const restoreScroll = () => {
   if (scroller.value) {
-    const el = scroller.value.$el
-    el.scrollTop = el.scrollHeight - previousScrollHeightMinusTop.value
+    const el = scroller.value.$el;
+    el.scrollTop = el.scrollHeight - previousScrollHeightMinusTop.value;
   }
-}
+};
 
 // 加载最新消息
 const loadLatestMessages = async () => {
-  if (loading.value) return
+  if (!selectedContact.value) return;
   
-  loading.value = true
   try {
-    const response = await axios.get('http://localhost:3001/api/messages/latest', {
-      params: { limit: messageLimit }
-    })
+    const response = await fetch(`http://localhost:3001/api/messages/latest?contactId=${selectedContact.value.id}&limit=50`);
+    const data = await response.json();
     
-    const newMessages = response.data.messages
-    if (newMessages.length > 0) {
-      messages.value = newMessages
-      oldestMessageId.value = newMessages[0].id
-      newestMessageId.value = newMessages[newMessages.length - 1].id
-    }
+    messages.value = data.messages;
+    hasMore.value = data.hasMore;
     
-    hasMore.value = response.data.hasMore
-    
-    // 等待 DOM 更新后滚动到底部
-    await nextTick()
-    // 添加一个小延时确保 DOM 完全渲染
+    // 等待DOM更新后滚动到底部
+    await nextTick();
     setTimeout(() => {
-      if (scroller.value) {
-        const el = scroller.value.$el
-        el.scrollTop = el.scrollHeight
-        // 再次检查并滚动，确保完全触底
+      if (scroller.value?.$el) {
+        scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight;
+        // 再次检查并滚动，确保位置正确
         setTimeout(() => {
-          el.scrollTop = el.scrollHeight
-        }, 100)
+          if (scroller.value?.$el) {
+            scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight;
+          }
+        }, 100);
       }
-    }, 100)
+    }, 100);
   } catch (error) {
-    console.error('加载最新消息失败:', error)
+    console.error('加载最新消息失败:', error);
   } finally {
-    loading.value = false
-    isInitialLoad.value = false
+    isInitialLoad.value = false; // 设置初始加载完成
   }
-}
+};
 
 // 加载更多历史消息
 const loadMoreHistory = async () => {
-  if (!hasMore.value || loadingMore.value || messages.value.length === 0) return
+  if (!selectedContact.value || !hasMore.value || loadingMore.value) return;
   
-  loadingMore.value = true
-  prepareScroll()
+  loadingMore.value = true;
+  prepareScroll();
   
   try {
-    const response = await axios.get('http://localhost:3001/api/messages/history', {
-      params: {
-        beforeId: oldestMessageId.value,
-        limit: messageLimit
-      }
-    })
+    const oldestMessage = messages.value[0];
+    if (!oldestMessage) return;
     
-    const historyMessages = response.data.messages
-    if (historyMessages.length > 0) {
-      oldestMessageId.value = historyMessages[0].id
-      messages.value = [...historyMessages, ...messages.value]
+    const response = await fetch(
+      `http://localhost:3001/api/messages/history?contactId=${selectedContact.value.id}&beforeId=${oldestMessage.id}&limit=50`
+    );
+    const data = await response.json();
+    
+    if (data.messages.length > 0) {
+      messages.value = [...data.messages, ...messages.value];
+      hasMore.value = data.hasMore;
       
       nextTick(() => {
-        restoreScroll()
-      })
+        restoreScroll();
+      });
     }
-    
-    hasMore.value = response.data.hasMore
   } catch (error) {
-    console.error('加载历史消息失败:', error)
+    console.error('加载历史消息失败:', error);
   } finally {
-    loadingMore.value = false
+    loadingMore.value = false;
   }
-}
+};
 
 // 处理滚动事件
 const handleScroll = (event) => {
-  if (isInitialLoad.value) return
+  if (isInitialLoad.value) return;
   
-  const el = event.target
-  const { scrollTop, scrollHeight, clientHeight } = el
+  const el = event.target;
+  const { scrollTop, scrollHeight, clientHeight } = el;
   
-  isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10
-  isAutoScrollEnabled.value = isScrolledToBottom.value
+  isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10;
+  isAutoScrollEnabled.value = isScrolledToBottom.value;
   
-  if (scrollTop < 50 && hasMore.value && !loadingMore.value) {
-    loadMoreHistory()
+  // 当滚动到顶部时加载更多历史消息
+  if (scrollTop < 100 && hasMore.value && !loadingMore.value) {
+    console.log('触发加载历史消息', { scrollTop, hasMore: hasMore.value, loadingMore: loadingMore.value });
+    loadMoreHistory();
+  }
+};
+
+// 加载联系人列表
+const loadContacts = async () => {
+  try {
+    const response = await axios.get('http://localhost:3001/api/contacts')
+    contacts.value = response.data
+    if (contacts.value.length > 0) {
+      selectedContact.value = contacts.value[0]
+      loadLatestMessages()
+    }
+  } catch (error) {
+    console.error('加载联系人列表失败:', error)
   }
 }
 
-// 发送消息
+// 切换联系人
+const switchContact = async (contact) => {
+  selectedContact.value = contact;
+  messages.value = [];
+  hasMore.value = true; // 重置hasMore状态
+  await loadLatestMessages();
+};
+
+// 修改发送消息函数
 const sendMessage = async () => {
-  if (!newMessage.value.trim()) return
+  if (!newMessage.value.trim() || !selectedContact.value) return
 
   const message = {
     id: Date.now(),
@@ -141,13 +156,9 @@ const sendMessage = async () => {
     isSelf: true
   }
 
-  // 添加消息到列表
   messages.value.push(message)
-
-  // 清空输入框
   newMessage.value = ''
 
-  // 等待 DOM 更新后滚动到底部
   await nextTick()
   if (scroller.value) {
     scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight
@@ -164,92 +175,128 @@ const formatTime = (timestamp) => {
 }
 
 onMounted(() => {
-  loadLatestMessages()
+  loadContacts()
 })
 </script>
 
 <template>
   <v-app>
-    <div class="chat-app">
-      <header class="chat-header">
-        <h2>聊天记录</h2>
-      </header>
-      
-      <main class="chat-content">
-        <div v-if="loadingMore" class="loading-indicator">
-          <v-progress-circular indeterminate color="primary" size="24"></v-progress-circular>
-          <span class="ml-2">正在加载历史消息...</span>
+    <div class="chat-layout">
+      <!-- 左侧联系人列表 -->
+      <aside class="contacts-sidebar">
+        <div class="contacts-header">
+          <h2>联系人列表</h2>
         </div>
-        
-        <div v-if="!hasMore" class="no-more-messages">
-          没有更多历史消息了
+        <div class="contacts-list">
+          <div
+            v-for="contact in contacts"
+            :key="contact.id"
+            class="contact-item"
+            :class="{ 'contact-item--active': selectedContact?.id === contact.id }"
+            @click="switchContact(contact)"
+          >
+            <v-avatar size="40">
+              <v-img :src="contact.avatar" :alt="contact.name"></v-img>
+            </v-avatar>
+            <div class="contact-info">
+              <div class="contact-name">{{ contact.name }}</div>
+              <div class="contact-last-message">{{ contact.lastMessage }}</div>
+            </div>
+            <div class="contact-meta">
+              <div class="contact-time">{{ formatTime(contact.lastMessageTime) }}</div>
+              <v-badge
+                v-if="contact.unreadCount > 0"
+                :content="contact.unreadCount"
+                color="error"
+              ></v-badge>
+            </div>
+          </div>
         </div>
+      </aside>
+
+      <!-- 右侧聊天区域 -->
+      <div class="chat-main">
+        <header class="chat-header">
+          <h2>与 {{ selectedContact?.name || '选择联系人' }} 的聊天</h2>
+        </header>
         
-        <DynamicScroller
-          ref="scroller"
-          :items="messages"
-          :min-item-size="60"
-          class="message-list"
-          @scroll="handleScroll"
-        >
-          <template v-slot="{ item }">
-            <DynamicScrollerItem
-              :item="item"
-              :active="true"
-            >
-              <div 
-                class="message-container"
-                :class="{ 'message-self': item.isSelf }"
+        <main class="chat-content">
+          <div v-if="loadingMore" class="loading-indicator">
+            <v-progress-circular indeterminate color="primary" size="24"></v-progress-circular>
+            <span class="ml-2">正在加载历史消息...</span>
+          </div>
+          
+          <div v-if="!hasMore" class="no-more-messages">
+            没有更多历史消息了
+          </div>
+          
+          <DynamicScroller
+            ref="scroller"
+            :items="messages"
+            :min-item-size="60"
+            class="message-list"
+            @scroll="handleScroll"
+          >
+            <template v-slot="{ item }">
+              <DynamicScrollerItem
+                :item="item"
+                :active="true"
               >
-                <div class="avatar">
-                  <v-avatar size="40">
-                    <v-img :src="item.senderAvatar" :alt="item.senderName"></v-img>
-                  </v-avatar>
-                </div>
-                <div class="message-content">
-                  <div class="message-info">
-                    <span class="sender-name">{{ item.senderName }}</span>
-                    <span class="timestamp">{{ formatTime(item.timestamp) }}</span>
+                <div 
+                  class="message-container"
+                  :class="{ 'message-self': item.isSelf }"
+                  :data-message-id="item.id"
+                >
+                  <div class="avatar">
+                    <v-avatar size="40">
+                      <v-img :src="item.senderAvatar" :alt="item.senderName"></v-img>
+                    </v-avatar>
                   </div>
-                  <div class="message-bubble">
-                    {{ item.content }}
+                  <div class="message-content">
+                    <div class="message-info">
+                      <span class="sender-name">{{ item.senderName }}</span>
+                      <span class="timestamp">{{ formatTime(item.timestamp) }}</span>
+                    </div>
+                    <div class="message-bubble">
+                      {{ item.content }}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </DynamicScrollerItem>
-          </template>
-        </DynamicScroller>
-      </main>
-      
-      <footer class="chat-footer">
-        <v-form @submit.prevent="sendMessage" class="message-form">
-          <v-row no-gutters>
-            <v-col cols="12">
-              <v-textarea
-                v-model="newMessage"
-                rows="3"
-                auto-grow
-                hide-details
-                placeholder="输入消息..."
-                @keydown.enter.prevent="sendMessage"
-                class="message-input"
-              ></v-textarea>
-            </v-col>
-          </v-row>
-          <v-row no-gutters class="mt-2">
-            <v-col cols="12" class="d-flex justify-end">
-              <v-btn
-                color="primary"
-                type="submit"
-                :disabled="!newMessage.trim()"
-                class="send-button"
-              >
-                发送
-              </v-btn>
-            </v-col>
-          </v-row>
-        </v-form>
-      </footer>
+              </DynamicScrollerItem>
+            </template>
+          </DynamicScroller>
+        </main>
+        
+        <footer class="chat-footer">
+          <v-form @submit.prevent="sendMessage" class="message-form">
+            <v-row no-gutters>
+              <v-col cols="12">
+                <v-textarea
+                  v-model="newMessage"
+                  rows="3"
+                  auto-grow
+                  hide-details
+                  placeholder="输入消息..."
+                  @keydown.enter.prevent="sendMessage"
+                  class="message-input"
+                ></v-textarea>
+              </v-col>
+            </v-row>
+            <v-row no-gutters class="mt-2">
+              <v-col cols="12" class="d-flex justify-end">
+                <v-btn
+                  color="primary"
+                  type="submit"
+                  :disabled="!newMessage.trim()"
+                  class="send-button"
+                >
+                  发送
+                </v-btn>
+              </v-col>
+            </v-row>
+          </v-form>
+        </footer>
+      </div>
     </div>
   </v-app>
 </template>
@@ -284,15 +331,91 @@ html, body {
   height: 100vh !important;
 }
 
-.chat-app {
-  max-width: 1200px;
-  width: 100%;
+.chat-layout {
+  display: flex;
   height: 100vh;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  background-color: white;
+}
+
+.contacts-sidebar {
+  width: 300px;
+  height: 100%;
+  border-right: 1px solid #eee;
   display: flex;
   flex-direction: column;
-  background-color: white;
-  position: relative;
+  flex-shrink: 0;
+}
+
+.contacts-header {
+  padding: 15px;
+  background-color: #42b983;
+  color: white;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.contacts-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.contact-item:hover {
+  background-color: #f5f5f5;
+}
+
+.contact-item--active {
+  background-color: #e3f2fd;
+}
+
+.contact-info {
+  flex: 1;
+  margin-left: 10px;
+  overflow: hidden;
+}
+
+.contact-name {
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.contact-last-message {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contact-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: 10px;
+}
+
+.contact-time {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .chat-header {
@@ -438,24 +561,23 @@ html, body {
 
 /* 响应式布局 */
 @media (max-width: 768px) {
-  .chat-app {
-    max-width: 100%;
+  .contacts-sidebar {
+    width: 100%;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.3s;
   }
-  
-  .message-container {
-    padding: 0 10px;
+
+  .contacts-sidebar--show {
+    transform: translateX(0);
   }
-  
-  .message-content {
-    max-width: 85%;
-  }
-  
-  .chat-footer {
-    padding: 10px;
-  }
-  
-  .message-form {
-    padding: 0 10px;
+
+  .chat-main {
+    width: 100%;
   }
 }
 
