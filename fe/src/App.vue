@@ -276,7 +276,7 @@ html, body {
 }
 
 .message-list {
-  height: calc(100vh - 130px);
+  height: 100%;
   overflow-y: auto;
   padding: 10px 0;
   max-width: 800px;
