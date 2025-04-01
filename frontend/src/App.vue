@@ -70,6 +70,51 @@
   </v-app>
 </template>
 
+<script setup>
+import { ref, onMounted, nextTick } from 'vue'
+import { RecycleScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+
+const currentUser = ref('张三')
+const messages = ref([])
+const loading = ref(false)
+const scroller = ref(null)
+const newMessage = ref('')
+
+// 发送消息
+const sendMessage = async () => {
+  if (!newMessage.value.trim()) return
+
+  const message = {
+    id: Date.now(),
+    content: newMessage.value.trim(),
+    sender: 'user',
+    timestamp: new Date().toISOString()
+  }
+
+  // 添加消息到列表
+  messages.value.push(message)
+
+  // 清空输入框
+  newMessage.value = ''
+
+  // 等待 DOM 更新后滚动到底部
+  await nextTick()
+  if (scroller.value) {
+    scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight
+  }
+}
+
+// 格式化时间
+const formatTime = (timestamp) => {
+  const date = new Date(timestamp)
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+</script>
+
 <style>
 /* 重置样式 */
 * {

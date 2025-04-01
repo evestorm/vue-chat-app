@@ -3,8 +3,10 @@ import { ref, onMounted, nextTick } from 'vue'
 import axios from 'axios'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import { RecycleScroller } from 'vue-virtual-scroller'
 
 // 状态管理
+const currentUser = ref('张三')
 const messages = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -19,6 +21,7 @@ const isAutoScrollEnabled = ref(true)
 const isScrolledToBottom = ref(true)
 const isInitialLoad = ref(true)
 const previousScrollHeightMinusTop = ref(0)
+const newMessage = ref('')
 
 // 准备滚动位置
 const prepareScroll = () => {
@@ -124,12 +127,40 @@ const handleScroll = (event) => {
   }
 }
 
+// 发送消息
+const sendMessage = async () => {
+  if (!newMessage.value.trim()) return
+
+  const message = {
+    id: Date.now(),
+    content: newMessage.value.trim(),
+    sender: 'user',
+    senderName: '我',
+    senderAvatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+    timestamp: new Date().toISOString(),
+    isSelf: true
+  }
+
+  // 添加消息到列表
+  messages.value.push(message)
+
+  // 清空输入框
+  newMessage.value = ''
+
+  // 等待 DOM 更新后滚动到底部
+  await nextTick()
+  if (scroller.value) {
+    scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight
+  }
+}
+
 // 格式化时间
 const formatTime = (timestamp) => {
   const date = new Date(timestamp)
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  return `${hours}:${minutes}`
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 onMounted(() => {
@@ -191,26 +222,33 @@ onMounted(() => {
       </main>
       
       <footer class="chat-footer">
-        <div class="input-container">
-          <v-text-field 
-            placeholder="输入消息..." 
-            variant="outlined" 
-            density="compact"
-            hide-details
-            disabled
-            class="message-input"
-          ></v-text-field>
-          <v-btn 
-            color="primary" 
-            disabled
-            class="ml-2"
-          >
-            发送
-          </v-btn>
-        </div>
-        <div class="footer-note">
-          <span>本示例仅展示聊天记录加载功能，不支持发送消息</span>
-        </div>
+        <v-form @submit.prevent="sendMessage" class="message-form">
+          <v-row no-gutters>
+            <v-col cols="12">
+              <v-textarea
+                v-model="newMessage"
+                rows="3"
+                auto-grow
+                hide-details
+                placeholder="输入消息..."
+                @keydown.enter.prevent="sendMessage"
+                class="message-input"
+              ></v-textarea>
+            </v-col>
+          </v-row>
+          <v-row no-gutters class="mt-2">
+            <v-col cols="12" class="d-flex justify-end">
+              <v-btn
+                color="primary"
+                type="submit"
+                :disabled="!newMessage.trim()"
+                class="send-button"
+              >
+                发送
+              </v-btn>
+            </v-col>
+          </v-row>
+        </v-form>
       </footer>
     </div>
   </v-app>
@@ -351,16 +389,16 @@ html, body {
   bottom: 0;
 }
 
-.input-container {
-  display: flex;
-  align-items: center;
-  max-width: 800px;
-  margin: 0 auto;
+.message-form {
   width: 100%;
 }
 
 .message-input {
   flex: 1;
+}
+
+.send-button {
+  margin-left: 8px;
 }
 
 .loading-indicator {
@@ -398,10 +436,6 @@ html, body {
   color: #999;
 }
 
-.ml-2 {
-  margin-left: 8px;
-}
-
 /* 响应式布局 */
 @media (max-width: 768px) {
   .chat-app {
@@ -420,7 +454,7 @@ html, body {
     padding: 10px;
   }
   
-  .input-container {
+  .message-form {
     padding: 0 10px;
   }
 }
