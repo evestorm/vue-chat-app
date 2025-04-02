@@ -197,5 +197,50 @@ router.get('/history', (req, res) => {
   });
 });
 
+// 获取与特定联系人的所有聊天记录
+router.get('/history/:contactId', (req, res) => {
+  const { contactId } = req.params;
+  
+  if (!messagesByContact[contactId]) {
+    return res.status(400).json({ message: '无效的联系人ID' });
+  }
+
+  // 从 messagesByContact 中获取该联系人的所有消息
+  const allMessages = messagesByContact[contactId];
+
+  // 按时间戳降序排序
+  const sortedMessages = [...allMessages].sort((a, b) => 
+    new Date(b.timestamp) - new Date(a.timestamp)
+  );
+
+  res.json(sortedMessages);
+});
+
+// 获取指定消息之后的消息
+router.get('/after/:messageId', (req, res) => {
+  const { messageId } = req.params;
+  const contactId = parseInt(req.query.contactId);
+  const limit = parseInt(req.query.limit) || 50;
+  
+  if (!contactId || !messagesByContact[contactId]) {
+    return res.status(400).json({ message: '无效的联系人ID' });
+  }
+
+  const messages = messagesByContact[contactId];
+  const messageIndex = messages.findIndex(msg => msg.id === parseInt(messageId));
+  
+  if (messageIndex === -1) {
+    return res.status(404).json({ message: '消息不存在' });
+  }
+
+  // 获取该消息之后的消息，限制数量
+  const afterMessages = messages.slice(messageIndex, messageIndex + limit);
+  
+  res.json({
+    messages: afterMessages,
+    hasMore: messageIndex + limit < messages.length
+  });
+});
+
 module.exports = router;
 module.exports.messagesByContact = messagesByContact; 

@@ -1,11 +1,11 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import axios from 'axios'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, Search } from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
 import { ElImageViewer } from 'element-plus'
 
@@ -14,7 +14,8 @@ const currentUser = ref('张三')
 const messages = ref([])
 const loading = ref(false)
 const loadingMore = ref(false)
-const hasMore = ref(true)
+const hasMoreHistory = ref(true) // 是否有更多历史消息
+const hasMoreNew = ref(true) // 是否有更多新消息
 const messageLimit = 50
 const oldestMessageId = ref(null)
 const newestMessageId = ref(null)
@@ -37,6 +38,24 @@ const isInitialLoad = ref(true)
 const previousScrollHeightMinusTop = ref(0)
 const newMessage = ref('')
 
+// 聊天记录相关状态
+const searchKeyword = ref('')
+const historyRecords = ref([])
+const selectedRecord = ref(null)
+
+// 过滤后的聊天记录
+const filteredHistoryRecords = computed(() => {
+  if (!searchKeyword.value) return historyRecords.value
+  const keyword = searchKeyword.value.toLowerCase()
+  return historyRecords.value.filter(record => 
+    record.content.toLowerCase().includes(keyword)
+  )
+})
+
+// 移除触摸相关的状态
+const lastScrollTop = ref(0)
+const scrollDirection = ref('down') // 'up' 或 'down'
+
 // 准备滚动位置
 const prepareScroll = () => {
   if (scroller.value) {
@@ -53,6 +72,52 @@ const restoreScroll = () => {
   }
 };
 
+// 处理滚动事件
+const handleScroll = (event) => {
+  if (isInitialLoad.value) return;
+  
+  const el = event.target;
+  const { scrollTop, scrollHeight, clientHeight } = el;
+  
+  // 根据滚动位置判断方向
+  if (scrollTop > lastScrollTop.value) {
+    scrollDirection.value = 'down';
+  } else if (scrollTop < lastScrollTop.value) {
+    scrollDirection.value = 'up';
+  }
+  lastScrollTop.value = scrollTop;
+  
+  isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10;
+  isAutoScrollEnabled.value = isScrolledToBottom.value;
+  
+  // 当滚动到顶部时加载更多历史消息
+  if (scrollTop < 100 && hasMoreHistory.value && !loadingMore.value) {
+    console.log('触发加载历史消息', { 
+      scrollTop, 
+      hasMoreHistory: hasMoreHistory.value, 
+      loadingMore: loadingMore.value,
+      direction: scrollDirection.value
+    });
+    loadMoreHistory();
+  }
+  
+  // 当滚动到底部时加载更多新消息
+  if (scrollHeight - scrollTop - clientHeight < 100 && 
+      hasMoreNew.value && 
+      !loadingMore.value && 
+      selectedRecord.value) {
+    console.log('触发加载新消息', { 
+      scrollTop, 
+      scrollHeight, 
+      clientHeight, 
+      hasMoreNew: hasMoreNew.value, 
+      loadingMore: loadingMore.value,
+      direction: scrollDirection.value
+    });
+    loadMoreAfter();
+  }
+};
+
 // 加载最新消息
 const loadLatestMessages = async () => {
   if (!selectedContact.value) return;
@@ -62,10 +127,10 @@ const loadLatestMessages = async () => {
     const data = await response.json();
     
     messages.value = data.messages;
-    hasMore.value = data.hasMore;
+    hasMoreNew.value = data.hasMore;
     
     // 如果首次加载就没有更多消息，显示提示
-    if (!hasMore.value) {
+    if (!hasMoreNew.value) {
       showNoMoreMessage.value = true;
       setTimeout(() => {
         showNoMoreMessage.value = false;
@@ -93,9 +158,8 @@ const loadLatestMessages = async () => {
 };
 
 // 加载更多历史消息
-// 解决方案来源: https://github.com/Akryum/vue-virtual-scroller/issues/728
 const loadMoreHistory = async () => {
-  if (!selectedContact.value || !hasMore.value || loadingMore.value) return;
+  if (!selectedContact.value || !hasMoreHistory.value || loadingMore.value) return;
   
   loadingMore.value = true;
   prepareScroll();
@@ -111,7 +175,7 @@ const loadMoreHistory = async () => {
     
     if (data.messages.length > 0) {
       messages.value = [...data.messages, ...messages.value];
-      hasMore.value = data.hasMore;
+      hasMoreHistory.value = data.hasMore;
       showNoMoreMessage.value = !data.hasMore;
       if (showNoMoreMessage.value) {
         setTimeout(() => {
@@ -122,6 +186,8 @@ const loadMoreHistory = async () => {
       nextTick(() => {
         restoreScroll();
       });
+    } else {
+      hasMoreHistory.value = false;
     }
   } catch (error) {
     console.error('加载历史消息失败:', error);
@@ -130,20 +196,32 @@ const loadMoreHistory = async () => {
   }
 };
 
-// 处理滚动事件
-const handleScroll = (event) => {
-  if (isInitialLoad.value) return;
+// 加载更多新消息
+const loadMoreAfter = async () => {
+  if (!selectedContact.value || !hasMoreNew.value || loadingMore.value || !selectedRecord.value) return;
   
-  const el = event.target;
-  const { scrollTop, scrollHeight, clientHeight } = el;
+  loadingMore.value = true;
   
-  isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10;
-  isAutoScrollEnabled.value = isScrolledToBottom.value;
-  
-  // 当滚动到顶部时加载更多历史消息
-  if (scrollTop < 100 && hasMore.value && !loadingMore.value) {
-    console.log('触发加载历史消息', { scrollTop, hasMore: hasMore.value, loadingMore: loadingMore.value });
-    loadMoreHistory();
+  try {
+    const newestMessage = messages.value[messages.value.length - 1];
+    if (!newestMessage) return;
+    
+    const response = await axios.get(`http://localhost:3001/api/messages/after/${newestMessage.id}`, {
+      params: {
+        contactId: selectedContact.value.id,
+        limit: 50
+      }
+    });
+    
+    if (response.data.messages.length > 0) {
+      messages.value.push(...response.data.messages);
+      hasMoreNew.value = response.data.hasMore;
+    }
+  } catch (error) {
+    console.error('加载新消息失败:', error);
+    ElMessage.error('加载新消息失败');
+  } finally {
+    loadingMore.value = false;
   }
 };
 
@@ -154,7 +232,8 @@ const loadContacts = async () => {
     contacts.value = response.data
     if (contacts.value.length > 0) {
       selectedContact.value = contacts.value[0]
-      loadLatestMessages()
+      await loadLatestMessages();
+      await loadChatHistory(selectedContact.value.id); // 加载该联系人的聊天记录
     }
   } catch (error) {
     console.error('加载联系人列表失败:', error)
@@ -163,10 +242,31 @@ const loadContacts = async () => {
 
 // 切换联系人
 const switchContact = async (contact) => {
-  selectedContact.value = contact;
+  // 重置所有状态
   messages.value = [];
-  hasMore.value = true; // 重置hasMore状态
+  loading.value = false;
+  loadingMore.value = false;
+  hasMoreHistory.value = true;
+  hasMoreNew.value = true;
+  oldestMessageId.value = null;
+  newestMessageId.value = null;
+  showNoMoreMessage.value = false;
+  isInitialLoad.value = true;
+  isAutoScrollEnabled.value = true;
+  isScrolledToBottom.value = true;
+  newMessage.value = '';
+  searchKeyword.value = '';
+  historyRecords.value = [];
+  selectedRecord.value = null;
+  lastScrollTop.value = 0;
+  scrollDirection.value = 'down';
+  
+  // 更新选中的联系人
+  selectedContact.value = contact;
+  
+  // 加载新数据
   await loadLatestMessages();
+  await loadChatHistory(contact.id);
 };
 
 // 修改发送消息函数
@@ -208,6 +308,75 @@ const handleImagePreview = (src, index = 0) => {
   showPreview.value = true
 }
 
+// 加载聊天记录
+const loadChatHistory = async (contactId) => {
+  try {
+    const response = await axios.get(`http://localhost:3001/api/messages/history/${contactId}`)
+    historyRecords.value = response.data
+  } catch (error) {
+    console.error('加载聊天记录失败:', error)
+    ElMessage.error('加载聊天记录失败')
+  }
+}
+
+// 处理搜索
+const handleSearch = () => {
+  // 搜索逻辑已通过计算属性实现
+}
+
+// 选择聊天记录
+const selectHistoryRecord = async (record) => {
+  selectedRecord.value = record;
+  
+  // 1. 检查消息是否在当前加载的消息列表中
+  const currentIndex = messages.value.findIndex(msg => msg.id === record.id);
+  
+  if (currentIndex !== -1) {
+    // 如果消息在当前列表中，直接滚动到该消息
+    scroller.value?.scrollToItem(currentIndex);
+    return;
+  }
+  
+  // 2. 如果消息不在当前列表中，需要加载相关消息
+  try {
+    // 加载该消息之前的历史消息
+    const historyResponse = await axios.get(`http://localhost:3001/api/messages/history`, {
+      params: {
+        contactId: selectedContact.value.id,
+        beforeId: record.id,
+        limit: 50
+      }
+    });
+    
+    // 加载该消息之后的消息
+    const afterResponse = await axios.get(`http://localhost:3001/api/messages/after/${record.id}`, {
+      params: {
+        contactId: selectedContact.value.id,
+        limit: 50
+      }
+    });
+    
+    // 合并消息并更新
+    const combinedMessages = [...historyResponse.data.messages, ...afterResponse.data.messages];
+    messages.value = combinedMessages;
+    
+    // 更新 hasMore 状态
+    hasMoreHistory.value = historyResponse.data.hasMore || afterResponse.data.hasMore;
+    // 更新 hasMoreNew 状态
+    hasMoreNew.value = afterResponse.data.hasMore;
+    
+    // 等待 DOM 更新后滚动到目标消息
+    await nextTick();
+    const newIndex = combinedMessages.findIndex(msg => msg.id === record.id);
+    if (newIndex !== -1) {
+      scroller.value?.scrollToItem(newIndex);
+    }
+  } catch (error) {
+    console.error('加载消息失败:', error);
+    ElMessage.error('加载消息失败');
+  }
+};
+
 onMounted(() => {
   loadContacts()
 })
@@ -245,7 +414,7 @@ onMounted(() => {
       </div>
     </aside>
 
-    <!-- 右侧聊天区域 -->
+    <!-- 中间聊天区域 -->
     <div class="chat-main">
       <header class="chat-header">
         <h2>与 {{ selectedContact?.name || '选择联系人' }} 的聊天</h2>
@@ -325,7 +494,7 @@ onMounted(() => {
           <span>正在加载历史消息...</span>
         </div>
         
-        <div v-if="!hasMore && showNoMoreMessage" class="no-more-messages">
+        <div v-if="!hasMoreHistory && showNoMoreMessage" class="no-more-messages">
           没有更多历史消息了
         </div>
       </main>
@@ -354,6 +523,37 @@ onMounted(() => {
         </el-form>
       </footer>
     </div>
+
+    <!-- 右侧聊天记录面板 -->
+    <aside class="chat-history-sidebar">
+      <div class="chat-history-header">
+        <h2>聊天记录</h2>
+      </div>
+      <div class="chat-history-search">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索聊天记录..."
+          clearable
+          @input="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+      </div>
+      <div class="chat-history-list">
+        <div
+          v-for="record in filteredHistoryRecords"
+          :key="record.id"
+          class="chat-history-item"
+          :class="{ 'chat-history-item--active': selectedRecord?.id === record.id }"
+          @click="selectHistoryRecord(record)"
+        >
+          <div class="chat-history-content">{{ record.content }}</div>
+          <div class="chat-history-time">{{ formatTime(record.timestamp) }}</div>
+        </div>
+      </div>
+    </aside>
 
     <!-- 添加图片预览容器 -->
     <el-image-viewer
@@ -485,6 +685,7 @@ html, body {
   flex-direction: column;
   background-color: #f5f5f5;
   overflow: hidden;
+  border-right: 1px solid #e0e0e0;
 }
 
 .chat-header {
@@ -502,7 +703,6 @@ html, body {
   flex: 1;
   overflow: hidden;
   position: relative;
-  padding: 20px;
   display: flex;
   flex-direction: column;
 }
@@ -797,5 +997,58 @@ html, body {
 
 .el-image-viewer__progress {
   color: #fff;
+}
+
+.chat-history-sidebar {
+  width: 300px;
+  background-color: white;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-history-header {
+  padding: 15px;
+  background-color: #42b983;
+  color: white;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.chat-history-search {
+  padding: 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.chat-history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.chat-history-item {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.chat-history-item:hover {
+  background-color: var(--el-fill-color-light);
+}
+
+.chat-history-item--active {
+  background-color: var(--el-color-primary-light-9);
+}
+
+.chat-history-content {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.chat-history-time {
+  font-size: 12px;
+  color: #999;
 }
 </style>
