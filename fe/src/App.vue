@@ -7,6 +7,7 @@ import { RecycleScroller } from 'vue-virtual-scroller'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
 import 'element-plus/dist/index.css'
+import { ElImageViewer } from 'element-plus'
 
 // 状态管理
 const currentUser = ref('张三')
@@ -20,6 +21,10 @@ const newestMessageId = ref(null)
 const contacts = ref([])
 const selectedContact = ref(null)
 const showNoMoreMessage = ref(false)
+const showPreview = ref(false)
+const previewUrlList = ref([])
+const previewInitialIndex = ref(0)
+const previewSrcList = ref([])
 
 // 常量定义
 const IMAGE_HEIGHT = 200 // 聊天消息中图片的固定高度（像素）
@@ -196,6 +201,13 @@ const formatTime = (timestamp) => {
   })
 }
 
+// 修改图片预览处理函数
+const handleImagePreview = (src, index = 0) => {
+  previewUrlList.value = [src]
+  previewInitialIndex.value = index
+  showPreview.value = true
+}
+
 onMounted(() => {
   loadContacts()
 })
@@ -269,12 +281,32 @@ onMounted(() => {
                   <div class="message-bubble">
                     <template v-if="item.content.includes('[图片]')">
                       <div v-if="item.content.startsWith('[图片]')" class="message-image">
-                        <el-image :src="item.content.replace('[图片]', '')" alt="图片" lazy></el-image>
+                        <el-image 
+                          :src="item.content.replace('[图片]', '')" 
+                          alt="图片" 
+                          lazy 
+                          fit="contain"
+                          @click="handleImagePreview(item.content.replace('[图片]', ''))"
+                        >
+                          <template #placeholder>
+                            <div class="image-slot"></div>
+                          </template>
+                        </el-image>
                       </div>
                       <template v-else>
                         <div class="message-text">{{ item.content.split('\n')[0] }}</div>
                         <div class="message-image">
-                          <el-image :src="item.content.split('\n')[1].replace('[图片]', '')" alt="图片" lazy></el-image>
+                          <el-image 
+                            :src="item.content.split('\n')[1].replace('[图片]', '')" 
+                            alt="图片" 
+                            lazy 
+                            fit="contain"
+                            @click="handleImagePreview(item.content.split('\n')[1].replace('[图片]', ''))"
+                          >
+                            <template #placeholder>
+                              <div class="image-slot"></div>
+                            </template>
+                          </el-image>
                         </div>
                       </template>
                     </template>
@@ -322,6 +354,20 @@ onMounted(() => {
         </el-form>
       </footer>
     </div>
+
+    <!-- 添加图片预览容器 -->
+    <el-image-viewer
+      v-if="showPreview"
+      :url-list="previewUrlList"
+      :initial-index="previewInitialIndex"
+      @close="showPreview = false"
+      :hide-on-click-modal="true"
+      :infinite="false"
+      :zoom-rate="1.2"
+      :min-scale="0.2"
+      :max-scale="7"
+      show-progress
+    />
   </div>
 </template>
 
@@ -658,7 +704,6 @@ html, body {
 .message-image .el-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover; /* 确保图片填充整个容器且保持比例 */
 }
 
 .message-text {
@@ -670,11 +715,45 @@ html, body {
   margin-top: 4px;
 }
 
-/* 移除 Vuetify 相关样式 */
-.v-application,
-.v-application__wrap {
-  width: 100% !important;
-  height: 100vh !important;
+.message-image .image-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--el-fill-color-light);
+  position: relative;
+  overflow: hidden;
+}
+
+.message-image .image-slot::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 200%;
+  }
+}
+
+/* 移除旧的 dot 动画 */
+.message-image .dot {
+  display: none;
 }
 
 /* 移动端样式 */
@@ -697,5 +776,26 @@ html, body {
   .message-self {
     margin-left: auto;
   }
+}
+
+/* 添加图片预览相关样式 */
+.el-image-viewer__wrapper {
+  z-index: 2000;
+}
+
+.el-image-viewer__btn {
+  color: #fff;
+}
+
+.el-image-viewer__actions {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.el-image-viewer__actions__inner {
+  color: #fff;
+}
+
+.el-image-viewer__progress {
+  color: #fff;
 }
 </style>
