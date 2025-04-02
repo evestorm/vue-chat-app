@@ -331,8 +331,21 @@ const selectHistoryRecord = async (record) => {
   // 1. 检查消息是否在当前加载的消息列表中
   const currentIndex = messages.value.findIndex(msg => msg.id === record.id);
   if (currentIndex !== -1) {
+    console.log('消息在当前列表中，直接滚动到该消息', currentIndex);
+    hasMoreNew.value = false; // note: 由于有可能选中项在列表的底部位置，这可能导致触发 loadMoreAfter 方法，从而导致消息列表的重复加载
     // 如果消息在当前列表中，直接滚动到该消息
     scroller.value?.scrollToItem(currentIndex);
+    setTimeout(() => scroller.value?.scrollToItem(currentIndex), 0);
+    // const tempMessages = messages.value;
+    // messages.value = [];
+    // previousScrollHeightMinusTop.value = 0;
+    // setTimeout(() => {
+    //   messages.value = tempMessages;
+    //   setTimeout(() => {
+    //     // 如果消息在当前列表中，直接滚动到该消息
+    //     scroller.value?.scrollToItem(currentIndex);
+    //   }, 500);
+    // });
     return;
   }
   
@@ -360,7 +373,11 @@ const selectHistoryRecord = async (record) => {
     messages.value = combinedMessages;
     
     // 更新 hasMore 状态
-    hasMoreHistory.value = historyResponse.data.hasMore || afterResponse.data.hasMore;
+    hasMoreHistory.value = historyResponse.data.hasMore;
+    showNoMoreMessage.value = !hasMoreHistory.value;
+    setTimeout(() => {
+      showNoMoreMessage.value = false;
+    }, 2000);
     // 更新 hasMoreNew 状态
     hasMoreNew.value = afterResponse.data.hasMore;
     
@@ -423,7 +440,7 @@ onMounted(() => {
         <DynamicScroller
           ref="scroller"
           :items="messages"
-          :min-item-size="60"
+          :min-item-size="1"
           class="message-list"
           @scroll="handleScroll"
           :buffer="2000"
