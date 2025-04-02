@@ -4,6 +4,9 @@ import axios from 'axios'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { RecycleScroller } from 'vue-virtual-scroller'
+import { ElMessage } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
+import 'element-plus/dist/index.css'
 
 // 状态管理
 const currentUser = ref('张三')
@@ -196,139 +199,127 @@ onMounted(() => {
 </script>
 
 <template>
-  <v-app>
-    <div class="chat-layout">
-      <!-- 左侧联系人列表 -->
-      <aside class="contacts-sidebar">
-        <div class="contacts-header">
-          <h2>联系人列表</h2>
-        </div>
-        <div class="contacts-list">
-          <div
-            v-for="contact in contacts"
-            :key="contact.id"
-            class="contact-item"
-            :class="{ 'contact-item--active': selectedContact?.id === contact.id }"
-            @click="switchContact(contact)"
-          >
-            <v-avatar size="40">
-              <v-img :src="contact.avatar" :alt="contact.name"></v-img>
-            </v-avatar>
-            <div class="contact-info">
-              <div class="contact-name">{{ contact.name }}</div>
-              <div class="contact-last-message">{{ contact.lastMessage }}</div>
-            </div>
-            <div class="contact-meta">
-              <div class="contact-time">{{ formatTime(contact.lastMessageTime) }}</div>
-              <v-badge
-                v-if="contact.unreadCount > 0"
-                :content="contact.unreadCount"
-                color="error"
-              ></v-badge>
-            </div>
+  <div class="chat-layout">
+    <!-- 左侧联系人列表 -->
+    <aside class="contacts-sidebar">
+      <div class="contacts-header">
+        <h2>联系人列表</h2>
+      </div>
+      <div class="contacts-list">
+        <div
+          v-for="contact in contacts"
+          :key="contact.id"
+          class="contact-item"
+          :class="{ 'contact-item--active': selectedContact?.id === contact.id }"
+          @click="switchContact(contact)"
+        >
+          <el-avatar :size="40" :src="contact.avatar" :alt="contact.name"></el-avatar>
+          <div class="contact-info">
+            <div class="contact-name">{{ contact.name }}</div>
+            <div class="contact-last-message">{{ contact.lastMessage }}</div>
+          </div>
+          <div class="contact-meta">
+            <div class="contact-time">{{ formatTime(contact.lastMessageTime) }}</div>
+            <el-badge
+              v-if="contact.unreadCount > 0"
+              :value="contact.unreadCount"
+              class="unread-badge"
+            ></el-badge>
           </div>
         </div>
-      </aside>
+      </div>
+    </aside>
 
-      <!-- 右侧聊天区域 -->
-      <div class="chat-main">
-        <header class="chat-header">
-          <h2>与 {{ selectedContact?.name || '选择联系人' }} 的聊天</h2>
-        </header>
-        
-        <main class="chat-content">
-          <div v-if="loadingMore" class="loading-indicator">
-            <v-progress-circular indeterminate color="primary" size="24"></v-progress-circular>
-            <span class="ml-2">正在加载历史消息...</span>
-          </div>
-          
-          <div v-if="!hasMore && showNoMoreMessage" class="no-more-messages">
-            没有更多历史消息了
-          </div>
-          
-          <DynamicScroller
-            ref="scroller"
-            :items="messages"
-            :min-item-size="60"
-            class="message-list"
-            @scroll="handleScroll"
-            :buffer="2000"
-          >
-            <template v-slot="{ item }">
-              <DynamicScrollerItem
-                :item="item"
-                :active="true"
+    <!-- 右侧聊天区域 -->
+    <div class="chat-main">
+      <header class="chat-header">
+        <h2>与 {{ selectedContact?.name || '选择联系人' }} 的聊天</h2>
+      </header>
+      
+      <main class="chat-content">
+        <DynamicScroller
+          ref="scroller"
+          :items="messages"
+          :min-item-size="60"
+          class="message-list"
+          @scroll="handleScroll"
+          :buffer="2000"
+        >
+          <template v-slot="{ item }">
+            <DynamicScrollerItem
+              :item="item"
+              :active="true"
+            >
+              <div 
+                class="message-container"
+                :class="{ 'message-self': item.isSelf }"
+                :data-message-id="item.id"
               >
-                <div 
-                  class="message-container"
-                  :class="{ 'message-self': item.isSelf }"
-                  :data-message-id="item.id"
-                >
-                  <div class="avatar">
-                    <v-avatar size="40">
-                      <v-img :src="item.senderAvatar" :alt="item.senderName"></v-img>
-                    </v-avatar>
+                <div class="avatar">
+                  <el-avatar :size="40" :src="item.senderAvatar" :alt="item.senderName"></el-avatar>
+                </div>
+                <div class="message-content">
+                  <div class="message-info">
+                    <span class="sender-name">{{ item.senderName }}</span>
+                    <span class="timestamp">{{ formatTime(item.timestamp) }}</span>
                   </div>
-                  <div class="message-content">
-                    <div class="message-info">
-                      <span class="sender-name">{{ item.senderName }}</span>
-                      <span class="timestamp">{{ formatTime(item.timestamp) }}</span>
-                    </div>
-                    <div class="message-bubble">
-                      <template v-if="item.content.includes('[图片]')">
-                        <div v-if="item.content.startsWith('[图片]')" class="message-image">
-                          <img :src="item.content.replace('[图片]', '')" alt="图片">
-                        </div>
-                        <template v-else>
-                          <div class="message-text">{{ item.content.split('\n')[0] }}</div>
-                          <div class="message-image">
-                            <img :src="item.content.split('\n')[1].replace('[图片]', '')" alt="图片">
-                          </div>
-                        </template>
-                      </template>
+                  <div class="message-bubble">
+                    <template v-if="item.content.includes('[图片]')">
+                      <div v-if="item.content.startsWith('[图片]')" class="message-image">
+                        <el-image :src="item.content.replace('[图片]', '')" alt="图片"></el-image>
+                      </div>
                       <template v-else>
-                        <div class="message-text">{{ item.content }}</div>
+                        <div class="message-text">{{ item.content.split('\n')[0] }}</div>
+                        <div class="message-image">
+                          <el-image :src="item.content.split('\n')[1].replace('[图片]', '')" alt="图片"></el-image>
+                        </div>
                       </template>
-                    </div>
+                    </template>
+                    <template v-else>
+                      <div class="message-text">{{ item.content }}</div>
+                    </template>
                   </div>
                 </div>
-              </DynamicScrollerItem>
-            </template>
-          </DynamicScroller>
-        </main>
+              </div>
+            </DynamicScrollerItem>
+          </template>
+        </DynamicScroller>
+
+        <div v-if="loadingMore" class="loading-indicator">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          <span>正在加载历史消息...</span>
+        </div>
         
-        <footer class="chat-footer">
-          <v-form @submit.prevent="sendMessage" class="message-form">
-            <v-row no-gutters>
-              <v-col cols="12">
-                <v-textarea
-                  v-model="newMessage"
-                  rows="3"
-                  auto-grow
-                  hide-details
-                  placeholder="输入消息..."
-                  @keydown.enter.prevent="sendMessage"
-                  class="message-input"
-                ></v-textarea>
-              </v-col>
-            </v-row>
-            <v-row no-gutters class="mt-2">
-              <v-col cols="12" class="d-flex justify-end">
-                <v-btn
-                  color="primary"
-                  type="submit"
-                  :disabled="!newMessage.trim()"
-                  class="send-button"
-                >
-                  发送
-                </v-btn>
-              </v-col>
-            </v-row>
-          </v-form>
-        </footer>
-      </div>
+        <div v-if="!hasMore && showNoMoreMessage" class="no-more-messages">
+          没有更多历史消息了
+        </div>
+      </main>
+      
+      <footer class="chat-footer">
+        <el-form @submit.prevent="sendMessage" class="message-form">
+          <el-input
+            v-model="newMessage"
+            type="textarea"
+            :rows="3"
+            :autosize="{ minRows: 3, maxRows: 5 }"
+            placeholder="输入消息..."
+            @keydown.enter.prevent="sendMessage"
+            class="message-input"
+          ></el-input>
+          <div class="message-actions">
+            <el-button
+              type="primary"
+              @click="sendMessage"
+              :disabled="!newMessage.trim()"
+              class="send-button"
+            >
+              发送
+            </el-button>
+          </div>
+        </el-form>
+      </footer>
     </div>
-  </v-app>
+  </div>
 </template>
 
 <style>
@@ -365,18 +356,16 @@ html, body {
   display: flex;
   height: 100vh;
   width: 100%;
-  max-width: 100%;
-  margin: 0;
-  background-color: white;
+  background-color: #f5f5f5;
 }
 
 .contacts-sidebar {
   width: 300px;
-  height: 100%;
-  border-right: 1px solid #eee;
+  background-color: white;
+  border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .contacts-header {
@@ -402,11 +391,11 @@ html, body {
 }
 
 .contact-item:hover {
-  background-color: #f5f5f5;
+  background-color: var(--el-fill-color-light);
 }
 
 .contact-item--active {
-  background-color: #e3f2fd;
+  background-color: var(--el-color-primary-light-9);
 }
 
 .contact-info {
@@ -445,7 +434,8 @@ html, body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  background-color: #f5f5f5;
+  overflow: hidden;
 }
 
 .chat-header {
@@ -461,29 +451,27 @@ html, body {
 
 .chat-content {
   flex: 1;
-  position: relative;
-  background-color: #f5f5f5;
   overflow: hidden;
+  position: relative;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
 }
 
 .message-list {
-  height: 100%;
-  overflow-y: auto;
-  padding: 10px 0;
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
+  flex: 1;
+  overflow: hidden;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .message-container {
   display: flex;
-  margin-bottom: 15px;
-  align-items: flex-start;
-  min-height: 60px;
-  padding: 0 20px;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
+  gap: 12px;
+  padding: 8px;
+  max-width: 100%;
 }
 
 .message-self {
@@ -496,9 +484,7 @@ html, body {
 }
 
 .message-content {
-  max-width: 70%;
-  display: flex;
-  flex-direction: column;
+  max-width: 100%;
 }
 
 .message-self .message-content {
@@ -523,14 +509,14 @@ html, body {
 .message-bubble {
   padding: 8px 12px;
   border-radius: 12px;
-  background-color: white;
+  background-color: #95EC69;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   word-break: break-word;
   line-height: 1.4;
 }
 
 .message-self .message-bubble {
-  background-color: #dcf8c6;
+  background-color: #95EC69;
 }
 
 .chat-footer {
@@ -547,7 +533,12 @@ html, body {
 }
 
 .message-input {
-  flex: 1;
+  margin-bottom: 10px;
+}
+
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .send-button {
@@ -562,11 +553,25 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 10px;
   color: #666;
   font-size: 14px;
   background: rgba(255, 255, 255, 0.9);
   z-index: 2;
+}
+
+.loading-indicator .el-icon {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .no-more-messages {
@@ -630,12 +635,11 @@ html, body {
 }
 
 .message-image {
-  max-width: 200px;
-  margin: 5px 0;
+  max-width: 100%;
 }
 
 .message-image img {
-  width: 100%;
+  max-width: 100%;
   height: auto;
   border-radius: 8px;
   cursor: pointer;
@@ -643,5 +647,17 @@ html, body {
 
 .message-text {
   margin-bottom: 5px;
+}
+
+/* 更新一些样式以适应 Element Plus */
+.unread-badge {
+  margin-top: 4px;
+}
+
+/* 移除 Vuetify 相关样式 */
+.v-application,
+.v-application__wrap {
+  width: 100% !important;
+  height: 100vh !important;
 }
 </style>
