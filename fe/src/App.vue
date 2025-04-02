@@ -16,6 +16,7 @@ const oldestMessageId = ref(null)
 const newestMessageId = ref(null)
 const contacts = ref([])
 const selectedContact = ref(null)
+const showNoMoreMessage = ref(false)
 
 // 引用
 const scroller = ref(null)
@@ -51,6 +52,14 @@ const loadLatestMessages = async () => {
     
     messages.value = data.messages;
     hasMore.value = data.hasMore;
+    
+    // 如果首次加载就没有更多消息，显示提示
+    if (!hasMore.value) {
+      showNoMoreMessage.value = true;
+      setTimeout(() => {
+        showNoMoreMessage.value = false;
+      }, 2000);
+    }
     
     // 等待DOM更新后滚动到底部
     await nextTick();
@@ -91,6 +100,12 @@ const loadMoreHistory = async () => {
     if (data.messages.length > 0) {
       messages.value = [...data.messages, ...messages.value];
       hasMore.value = data.hasMore;
+      showNoMoreMessage.value = !data.hasMore;
+      if (showNoMoreMessage.value) {
+        setTimeout(() => {
+          showNoMoreMessage.value = false;
+        }, 2000);
+      }
       
       nextTick(() => {
         restoreScroll();
@@ -226,7 +241,7 @@ onMounted(() => {
             <span class="ml-2">正在加载历史消息...</span>
           </div>
           
-          <div v-if="!hasMore" class="no-more-messages">
+          <div v-if="!hasMore && showNoMoreMessage" class="no-more-messages">
             没有更多历史消息了
           </div>
           
@@ -258,7 +273,20 @@ onMounted(() => {
                       <span class="timestamp">{{ formatTime(item.timestamp) }}</span>
                     </div>
                     <div class="message-bubble">
-                      {{ item.content }}
+                      <template v-if="item.content.includes('[图片]')">
+                        <div v-if="item.content.startsWith('[图片]')" class="message-image">
+                          <img :src="item.content.replace('[图片]', '')" alt="图片">
+                        </div>
+                        <template v-else>
+                          <div class="message-text">{{ item.content.split('\n')[0] }}</div>
+                          <div class="message-image">
+                            <img :src="item.content.split('\n')[1].replace('[图片]', '')" alt="图片">
+                          </div>
+                        </template>
+                      </template>
+                      <template v-else>
+                        <div class="message-text">{{ item.content }}</div>
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -597,5 +625,21 @@ html, body {
 
 .message-list::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+.message-image {
+  max-width: 200px;
+  margin: 5px 0;
+}
+
+.message-image img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.message-text {
+  margin-bottom: 5px;
 }
 </style>

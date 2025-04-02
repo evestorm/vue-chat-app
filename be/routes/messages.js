@@ -67,6 +67,50 @@ function getRandomMessage() {
   return messages[Math.floor(Math.random() * messages.length)];
 }
 
+// 生成随机图片URL
+function getRandomImage() {
+  const images = [
+    'https://picsum.photos/200/200?random=1',
+    'https://picsum.photos/200/200?random=2',
+    'https://picsum.photos/200/200?random=3',
+    'https://picsum.photos/200/200?random=4',
+    'https://picsum.photos/200/200?random=5',
+    'https://picsum.photos/200/200?random=6',
+    'https://picsum.photos/200/200?random=7',
+    'https://picsum.photos/200/200?random=8',
+    'https://picsum.photos/200/200?random=9',
+    'https://picsum.photos/200/200?random=10'
+  ];
+  return images[Math.floor(Math.random() * images.length)];
+}
+
+// 生成随机消息内容（可能包含文字和图片）
+function generateMessageContent(messageIndex) {
+  // 确保至少有一种内容（文字或图片）
+  const hasText = Math.random() > 0.3; // 70%的概率有文字
+  const hasImage = Math.random() > 0.5; // 50%的概率有图片
+  
+  // 如果都没有，强制添加文字
+  if (!hasText && !hasImage) {
+    return `[${messageIndex + 1}] ${getRandomMessage()}`;
+  }
+  
+  let content = '';
+  
+  if (hasText) {
+    content += `[${messageIndex + 1}] ${getRandomMessage()}`;
+  }
+  
+  if (hasImage) {
+    if (hasText) {
+      content += '\n'; // 如果有文字，添加换行
+    }
+    content += `[图片]${getRandomImage()}`;
+  }
+  
+  return content;
+}
+
 // 生成联系人的聊天记录
 function generateMessagesForContact(contactId, contactName, contactAvatar) {
   const messageCount = Math.floor(Math.random() * 1000); // 0-1000条消息
@@ -80,7 +124,7 @@ function generateMessagesForContact(contactId, contactName, contactAvatar) {
     const isSelf = Math.random() > 0.5;
     messages.push({
       id: i + 1, // 使用纯数字ID
-      content: `[${i + 1}/${messageCount}] ${getRandomMessage()}`, // 添加序号标记
+      content: generateMessageContent(i), // 传入当前索引
       sender: isSelf ? 'user' : 'other',
       senderName: isSelf ? '我' : contactName,
       senderAvatar: isSelf ? 'https://randomuser.me/api/portraits/men/1.jpg' : contactAvatar,
