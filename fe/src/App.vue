@@ -240,8 +240,7 @@ const loadContacts = async () => {
   }
 }
 
-// 切换联系人
-const switchContact = async (contact) => {
+const resetState = () => {
   // 重置所有状态
   messages.value = [];
   loading.value = false;
@@ -260,7 +259,13 @@ const switchContact = async (contact) => {
   selectedRecord.value = null;
   lastScrollTop.value = 0;
   scrollDirection.value = 'down';
-  
+  previousScrollHeightMinusTop.value = 0;
+}
+
+// 切换联系人
+const switchContact = async (contact) => {
+  // 重置所有状态
+  resetState();
   // 更新选中的联系人
   selectedContact.value = contact;
   
@@ -319,18 +324,12 @@ const loadChatHistory = async (contactId) => {
   }
 }
 
-// 处理搜索
-const handleSearch = () => {
-  // 搜索逻辑已通过计算属性实现
-}
-
 // 选择聊天记录
 const selectHistoryRecord = async (record) => {
   selectedRecord.value = record;
   
   // 1. 检查消息是否在当前加载的消息列表中
   const currentIndex = messages.value.findIndex(msg => msg.id === record.id);
-  
   if (currentIndex !== -1) {
     // 如果消息在当前列表中，直接滚动到该消息
     scroller.value?.scrollToItem(currentIndex);
@@ -379,7 +378,7 @@ const selectHistoryRecord = async (record) => {
 
 onMounted(() => {
   loadContacts()
-})
+});
 </script>
 
 <template>
@@ -534,7 +533,6 @@ onMounted(() => {
           v-model="searchKeyword"
           placeholder="搜索聊天记录..."
           clearable
-          @input="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
