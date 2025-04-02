@@ -498,6 +498,12 @@ html, body {
   font-size: 12px;
   margin-bottom: 2px;
   color: #888;
+  display: flex;
+  align-items: center;
+}
+
+.message-self .message-info {
+  flex-direction: row-reverse;
 }
 
 .timestamp {
