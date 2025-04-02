@@ -82,6 +82,7 @@ const loadLatestMessages = async () => {
 };
 
 // 加载更多历史消息
+// 解决方案来源: https://github.com/Akryum/vue-virtual-scroller/issues/728
 const loadMoreHistory = async () => {
   if (!selectedContact.value || !hasMore.value || loadingMore.value) return;
   
@@ -251,6 +252,7 @@ onMounted(() => {
             :min-item-size="60"
             class="message-list"
             @scroll="handleScroll"
+            :buffer="2000"
           >
             <template v-slot="{ item }">
               <DynamicScrollerItem
