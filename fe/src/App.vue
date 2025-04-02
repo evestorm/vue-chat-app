@@ -269,20 +269,12 @@ onMounted(() => {
                   <div class="message-bubble">
                     <template v-if="item.content.includes('[图片]')">
                       <div v-if="item.content.startsWith('[图片]')" class="message-image">
-                        <el-image :src="item.content.replace('[图片]', '')" alt="图片" lazy fit="contain">
-                          <template #placeholder>
-                            <div class="image-slot">Loading<span class="dot">...</span></div>
-                          </template>
-                        </el-image>
+                        <el-image :src="item.content.replace('[图片]', '')" alt="图片" lazy></el-image>
                       </div>
                       <template v-else>
                         <div class="message-text">{{ item.content.split('\n')[0] }}</div>
                         <div class="message-image">
-                          <el-image :src="item.content.split('\n')[1].replace('[图片]', '')" alt="图片" lazy fit="contain">
-                            <template #placeholder>
-                              <div class="image-slot">Loading<span class="dot">...</span></div>
-                            </template>
-                          </el-image>
+                          <el-image :src="item.content.split('\n')[1].replace('[图片]', '')" alt="图片" lazy></el-image>
                         </div>
                       </template>
                     </template>
@@ -496,8 +488,6 @@ html, body {
 
 .message-content {
   max-width: 100%;
-  display: flex;
-  flex-direction: column;
 }
 
 .message-self .message-content {
@@ -526,18 +516,10 @@ html, body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   word-break: break-word;
   line-height: 1.4;
-  max-width: 83.33%; /* 移动端默认宽度为 5/6 */
 }
 
 .message-self .message-bubble {
   background-color: #c8e6c9;  /* 稍深的绿色背景 */
-}
-
-/* PC端样式 */
-@media screen and (min-width: 768px) {
-  .message-bubble {
-    max-width: 68%; /* PC端最大宽度为68% */
-  }
 }
 
 .chat-footer {
@@ -658,19 +640,19 @@ html, body {
 .message-image {
   max-width: 100%;
   height: v-bind(IMAGE_HEIGHT + 'px'); /* 使用定义的常量 */
-  display: flex;
-  justify-content: flex-start; /* 默认左对齐 */
-}
-
-.message-self .message-image {
-  justify-content: flex-end; /* 自己发送的消息图片右对齐 */
 }
 
 .message-image .el-image {
-  width: auto; /* 改为自适应宽度 */
+  width: 100%;
   height: 100%;
   border-radius: 8px;
   cursor: pointer;
+}
+
+.message-image .el-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 确保图片填充整个容器且保持比例 */
 }
 
 .message-text {
@@ -689,26 +671,25 @@ html, body {
   height: 100vh !important;
 }
 
-.image-slot {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
+/* 移动端样式 */
+@media screen and (max-width: 768px) {
+  .message-container {
+    max-width: 83.33%; /* 5/6 */
+  }
+  
+  .message-self {
+    margin-left: auto;
+  }
 }
 
-.dot {
-  animation: dot 2s infinite steps(3, start);
-  overflow: hidden;
-}
-
-@keyframes dot {
-  0%, 20% { content: '.'; }
-  40% { content: '..'; }
-  60% { content: '...'; }
-  80%, 100% { content: ''; }
+/* PC端样式 */
+@media screen and (min-width: 769px) {
+  .message-container {
+    max-width: 68%;
+  }
+  
+  .message-self {
+    margin-left: auto;
+  }
 }
 </style>
