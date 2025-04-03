@@ -10,30 +10,23 @@ import 'element-plus/dist/index.css'
 import { ElImageViewer } from 'element-plus'
 
 // 状态管理
-const currentUser = ref('张三')
-const messages = ref([])
-const loading = ref(false)
-const loadingMore = ref(false)
+const messages = ref([]) // 消息列表
+const loadingMore = ref(false) // 是否正在加载更多消息
 const hasMoreHistory = ref(true) // 是否有更多历史消息
 const hasMoreNew = ref(true) // 是否有更多新消息
-const messageLimit = 50
-const oldestMessageId = ref(null)
-const newestMessageId = ref(null)
-const contacts = ref([])
-const selectedContact = ref(null)
-const showNoMoreMessage = ref(false)
-const showPreview = ref(false)
-const previewUrlList = ref([])
-const previewInitialIndex = ref(0)
-const previewSrcList = ref([])
+const messageLimit = 50 // 消息限制
+const contacts = ref([]) // 联系人列表
+const selectedContact = ref(null) // 选中的联系人
+const showNoMoreMessage = ref(false) // 是否显示没有更多消息
+const showPreview = ref(false) // 是否显示图片预览
+const previewUrlList = ref([]) // 图片预览列表
+const previewInitialIndex = ref(0) // 图片预览初始索引
 
 // 常量定义
 const IMAGE_HEIGHT = 200 // 聊天消息中图片的固定高度（像素）
 
 // 引用
 const scroller = ref(null)
-const isAutoScrollEnabled = ref(true)
-const isScrolledToBottom = ref(true)
 const isInitialLoad = ref(true)
 const previousScrollHeightMinusTop = ref(0)
 const newMessage = ref('')
@@ -86,10 +79,7 @@ const handleScroll = (event) => {
     scrollDirection.value = 'up';
   }
   lastScrollTop.value = scrollTop;
-  
-  isScrolledToBottom.value = scrollHeight - scrollTop - clientHeight < 10;
-  isAutoScrollEnabled.value = isScrolledToBottom.value;
-  
+
   // 当滚动到顶部时加载更多历史消息
   if (scrollTop < 100 && hasMoreHistory.value && !loadingMore.value) {
     console.log('触发加载历史消息', { 
@@ -123,7 +113,7 @@ const loadLatestMessages = async () => {
   if (!selectedContact.value) return;
   
   try {
-    const response = await fetch(`http://localhost:3001/api/messages/latest?contactId=${selectedContact.value.id}&limit=50`);
+    const response = await fetch(`http://localhost:3001/api/messages/latest?contactId=${selectedContact.value.id}&limit=${messageLimit}`);
     const data = await response.json();
     
     messages.value = data.messages;
@@ -169,7 +159,7 @@ const loadMoreHistory = async () => {
     if (!oldestMessage) return;
     
     const response = await fetch(
-      `http://localhost:3001/api/messages/history?contactId=${selectedContact.value.id}&beforeId=${oldestMessage.id}&limit=50`
+      `http://localhost:3001/api/messages/history?contactId=${selectedContact.value.id}&beforeId=${oldestMessage.id}&limit=${messageLimit}`
     );
     const data = await response.json();
     
@@ -209,12 +199,17 @@ const loadMoreAfter = async () => {
     const response = await axios.get(`http://localhost:3001/api/messages/after/${newestMessage.id}`, {
       params: {
         contactId: selectedContact.value.id,
-        limit: 50
+        limit: messageLimit
       }
     });
     
     if (response.data.messages.length > 0) {
-      messages.value.push(...response.data.messages);
+      // 过滤掉重复的消息（第一条消息，即 newestMessage）
+      // 因为 after 接口的第一条消息就是 newestMessage, 
+      // 而 newestMessage 已经在 messages 列表中, 
+      // 如果直接 push 会导致 newestMessage 消息列表重复
+      const newMessages = response.data.messages.slice(1);
+      messages.value.push(...newMessages);
       hasMoreNew.value = response.data.hasMore;
     }
   } catch (error) {
@@ -243,16 +238,11 @@ const loadContacts = async () => {
 const resetState = () => {
   // 重置所有状态
   messages.value = [];
-  loading.value = false;
   loadingMore.value = false;
   hasMoreHistory.value = true;
   hasMoreNew.value = true;
-  oldestMessageId.value = null;
-  newestMessageId.value = null;
   showNoMoreMessage.value = false;
   isInitialLoad.value = true;
-  isAutoScrollEnabled.value = true;
-  isScrolledToBottom.value = true;
   newMessage.value = '';
   searchKeyword.value = '';
   historyRecords.value = [];
@@ -336,19 +326,10 @@ const selectHistoryRecord = async (record) => {
     // 如果消息在当前列表中，直接滚动到该消息
     scroller.value?.scrollToItem(currentIndex);
     setTimeout(() => scroller.value?.scrollToItem(currentIndex), 0);
-    // const tempMessages = messages.value;
-    // messages.value = [];
-    // previousScrollHeightMinusTop.value = 0;
-    // setTimeout(() => {
-    //   messages.value = tempMessages;
-    //   setTimeout(() => {
-    //     // 如果消息在当前列表中，直接滚动到该消息
-    //     scroller.value?.scrollToItem(currentIndex);
-    //   }, 500);
-    // });
     return;
   }
   
+  console.log('消息不在当前列表中，需要加载相关消息', currentIndex, record);
   // 2. 如果消息不在当前列表中，需要加载相关消息
   try {
     // 加载该消息之前的历史消息
@@ -356,7 +337,7 @@ const selectHistoryRecord = async (record) => {
       params: {
         contactId: selectedContact.value.id,
         beforeId: record.id,
-        limit: 50
+        limit: messageLimit
       }
     });
     
@@ -364,7 +345,7 @@ const selectHistoryRecord = async (record) => {
     const afterResponse = await axios.get(`http://localhost:3001/api/messages/after/${record.id}`, {
       params: {
         contactId: selectedContact.value.id,
-        limit: 50
+        limit: messageLimit
       }
     });
     
@@ -375,9 +356,11 @@ const selectHistoryRecord = async (record) => {
     // 更新 hasMore 状态
     hasMoreHistory.value = historyResponse.data.hasMore;
     showNoMoreMessage.value = !hasMoreHistory.value;
-    setTimeout(() => {
-      showNoMoreMessage.value = false;
-    }, 2000);
+    if (showNoMoreMessage.value) {
+      setTimeout(() => {
+        showNoMoreMessage.value = false;
+      }, 2000);
+    }
     // 更新 hasMoreNew 状态
     hasMoreNew.value = afterResponse.data.hasMore;
     
@@ -386,6 +369,7 @@ const selectHistoryRecord = async (record) => {
     const newIndex = combinedMessages.findIndex(msg => msg.id === record.id);
     if (newIndex !== -1) {
       scroller.value?.scrollToItem(newIndex);
+      setTimeout(() => scroller.value?.scrollToItem(newIndex), 0); // note: 延迟滚动，确保消息列表已经更新
     }
   } catch (error) {
     console.error('加载消息失败:', error);
