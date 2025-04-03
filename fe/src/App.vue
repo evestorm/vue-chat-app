@@ -602,16 +602,6 @@ html, body {
   height: 100vh;
 }
 
-.v-application {
-  width: 100% !important;
-  height: 100vh !important;
-}
-
-.v-application__wrap {
-  width: 100% !important;
-  height: 100vh !important;
-}
-
 .chat-layout {
   display: flex;
   height: 100vh;
