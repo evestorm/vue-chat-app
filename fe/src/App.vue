@@ -26,17 +26,17 @@ const previewInitialIndex = ref(0) // 图片预览初始索引
 const IMAGE_HEIGHT = 200 // 聊天消息中图片的固定高度（像素）
 
 // 引用
-const scroller = ref(null)
-const isInitialLoad = ref(true)
-const previousScrollHeightMinusTop = ref(0)
-const newMessage = ref('')
+const scroller = ref(null) // 虚拟滚动器
+const isInitialLoad = ref(true) // 是否是初始加载
+const previousScrollHeightMinusTop = ref(0) // 上一次滚动高度
+const newMessage = ref('') // 底部 input 框中要发送的新消息
 
 // 聊天记录相关状态
-const searchKeyword = ref('')
-const historyRecords = ref([])
-const selectedRecord = ref(null)
+const searchKeyword = ref('') // 搜索关键词
+const historyRecords = ref([]) // 与某人的聊天记录
+const selectedRecord = ref(null) // 在聊天记录中选中的要跳转的聊天记录
 
-// 过滤后的聊天记录
+// 根据搜索关键词过滤后的聊天记录
 const filteredHistoryRecords = computed(() => {
   if (!searchKeyword.value) return historyRecords.value
   const keyword = searchKeyword.value.toLowerCase()
@@ -45,14 +45,11 @@ const filteredHistoryRecords = computed(() => {
   )
 })
 
-// 移除触摸相关的状态
-const lastScrollTop = ref(0)
-const scrollDirection = ref('down') // 'up' 或 'down'
-
 // 准备滚动位置
 const prepareScroll = () => {
   if (scroller.value) {
     const el = scroller.value.$el;
+    // 计算上一次滚动高度
     previousScrollHeightMinusTop.value = el.scrollHeight - el.scrollTop;
   }
 };
@@ -71,14 +68,6 @@ const handleScroll = (event) => {
   
   const el = event.target;
   const { scrollTop, scrollHeight, clientHeight } = el;
-  
-  // 根据滚动位置判断方向
-  if (scrollTop > lastScrollTop.value) {
-    scrollDirection.value = 'down';
-  } else if (scrollTop < lastScrollTop.value) {
-    scrollDirection.value = 'up';
-  }
-  lastScrollTop.value = scrollTop;
 
   // 当滚动到顶部时加载更多历史消息
   if (scrollTop < 100 && hasMoreHistory.value && !loadingMore.value) {
@@ -86,7 +75,6 @@ const handleScroll = (event) => {
       scrollTop, 
       hasMoreHistory: hasMoreHistory.value, 
       loadingMore: loadingMore.value,
-      direction: scrollDirection.value
     });
     loadMoreHistory();
   }
@@ -102,7 +90,6 @@ const handleScroll = (event) => {
       clientHeight, 
       hasMoreNew: hasMoreNew.value, 
       loadingMore: loadingMore.value,
-      direction: scrollDirection.value
     });
     loadMoreAfter();
   }
@@ -122,9 +109,7 @@ const loadLatestMessages = async () => {
     // 如果首次加载就没有更多消息，显示提示
     if (!hasMoreNew.value) {
       showNoMoreMessage.value = true;
-      setTimeout(() => {
-        showNoMoreMessage.value = false;
-      }, 2000);
+      setTimeout(() => showNoMoreMessage.value = false, 2000);
     }
     
     // 等待DOM更新后滚动到底部
@@ -137,9 +122,9 @@ const loadLatestMessages = async () => {
           if (scroller.value?.$el) {
             scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight;
           }
-        }, 100);
+        });
       }
-    }, 100);
+    });
   } catch (error) {
     console.error('加载最新消息失败:', error);
   } finally {
@@ -247,8 +232,6 @@ const resetState = () => {
   searchKeyword.value = '';
   historyRecords.value = [];
   selectedRecord.value = null;
-  lastScrollTop.value = 0;
-  scrollDirection.value = 'down';
   previousScrollHeightMinusTop.value = 0;
 }
 
