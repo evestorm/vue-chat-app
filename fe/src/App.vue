@@ -104,27 +104,15 @@ const loadLatestMessages = async () => {
     const data = await response.json();
     
     messages.value = data.messages;
-    hasMoreNew.value = data.hasMore;
-    
-    // 如果首次加载就没有更多消息，显示提示
-    if (!hasMoreNew.value) {
-      showNoMoreMessage.value = true;
+    hasMoreNew.value = false; // 已经加载的是最新的消息，没有更多消息了
+    showNoMoreMessage.value = !data.hasMore;
+    if (showNoMoreMessage.value) {
       setTimeout(() => showNoMoreMessage.value = false, 2000);
     }
     
     // 等待DOM更新后滚动到底部
     await nextTick();
-    setTimeout(() => {
-      if (scroller.value?.$el) {
-        scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight;
-        // 再次检查并滚动，确保位置正确
-        setTimeout(() => {
-          if (scroller.value?.$el) {
-            scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight;
-          }
-        });
-      }
-    });
+    scrollToBottom();
   } catch (error) {
     console.error('加载最新消息失败:', error);
   } finally {
@@ -222,17 +210,27 @@ const loadContacts = async () => {
 
 const resetState = () => {
   // 重置所有状态
-  messages.value = [];
-  loadingMore.value = false;
-  hasMoreHistory.value = true;
-  hasMoreNew.value = true;
-  showNoMoreMessage.value = false;
-  isInitialLoad.value = true;
-  newMessage.value = '';
-  searchKeyword.value = '';
-  historyRecords.value = [];
-  selectedRecord.value = null;
-  previousScrollHeightMinusTop.value = 0;
+  messages.value = [] // 消息列表
+  loadingMore.value = false // 是否正在加载更多消息
+  hasMoreHistory.value = true // 是否有更多历史消息
+  hasMoreNew.value = true // 是否有更多新消息
+  // contacts.value = [] // 联系人列表
+  // selectedContact.value = null // 选中的联系人
+  showNoMoreMessage.value = false // 是否显示没有更多消息
+  showPreview.value = false // 是否显示图片预览
+  previewUrlList.value = [] // 图片预览列表
+  previewInitialIndex.value = 0 // 图片预览初始索引
+
+  // 引用
+  // scroller.value = null // 虚拟滚动器
+  isInitialLoad.value = true // 是否是初始加载
+  previousScrollHeightMinusTop.value = 0 // 上一次滚动高度
+  newMessage.value = '' // 底部 input 框中要发送的新消息
+
+  // 聊天记录相关状态
+  // searchKeyword.value = '' // 搜索关键词
+  // historyRecords.value = [] // 与某人的聊天记录
+  // selectedRecord.value = null // 在聊天记录中选中的要跳转的聊天记录
 }
 
 // 切换联系人
@@ -248,7 +246,7 @@ const switchContact = async (contact) => {
 };
 
 // 修改发送消息函数
-const sendMessage = async () => {
+const sendMessageBak = async () => {
   if (!newMessage.value.trim() || !selectedContact.value) return
 
   const message = {
@@ -267,6 +265,37 @@ const sendMessage = async () => {
   await nextTick()
   if (scroller.value) {
     scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight
+  }
+}
+
+// 修改发送消息函数
+const sendMessage = async () => {
+  if (!newMessage.value.trim() || !selectedContact.value) return
+
+  const message = {
+    id: Date.now(),
+    content: newMessage.value.trim(),
+    sender: 'user',
+    senderName: '我',
+    senderAvatar: 'https://randomuser.me/api/portraits/men/1.jpg',
+    timestamp: new Date().toISOString(),
+    isSelf: true
+  }
+
+  resetState()
+  await loadLatestMessages()
+  messages.value.push(message)
+  await nextTick()
+  scrollToBottom();
+}
+
+const scrollToBottom = () => {
+  if (scroller.value) {
+    scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight
+    // 延迟滚动，二次保险确保滚动到底部
+    setTimeout(() => {
+      scroller.value.$el.scrollTop = scroller.value.$el.scrollHeight
+    }, 500)
   }
 }
 
