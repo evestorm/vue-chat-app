@@ -22,6 +22,9 @@ const showPreview = ref(false) // 是否显示图片预览
 const previewUrlList = ref([]) // 图片预览列表
 const previewInitialIndex = ref(0) // 图片预览初始索引
 
+// 消息显示位置配置
+const selfMessagePosition = ref('left') // 'left' 或 'right'
+
 // 常量定义
 const IMAGE_HEIGHT = 200 // 聊天消息中图片的固定高度（像素）
 
@@ -448,7 +451,12 @@ onMounted(() => {
             >
               <div 
                 class="message-container"
-                :class="{ 'message-self': item.isSelf }"
+                :class="{ 
+                  'message-self': item.isSelf && selfMessagePosition === 'right',
+                  'message-self-left': item.isSelf && selfMessagePosition === 'left',
+                  'message-other-right': !item.isSelf && selfMessagePosition === 'left',
+                  'message-other-left': !item.isSelf && selfMessagePosition === 'right'
+                }"
                 :data-message-id="item.id"
               >
                 <div class="avatar">
@@ -963,7 +971,8 @@ html, body {
     max-width: 83.33%; /* 5/6 */
   }
   
-  .message-self {
+  .message-self,
+  .message-other-right {
     margin-left: auto;
   }
 }
@@ -974,7 +983,8 @@ html, body {
     max-width: 68%;
   }
   
-  .message-self {
+  .message-self,
+  .message-other-right {
     margin-left: auto;
   }
 }
@@ -1051,5 +1061,39 @@ html, body {
 .chat-history-time {
   font-size: 12px;
   color: #999;
+}
+
+.message-self-left {
+  flex-direction: row;
+}
+
+.message-other-right {
+  flex-direction: row-reverse;
+}
+
+.message-self-left .message-content {
+  align-items: flex-start;
+}
+
+.message-other-right .message-content {
+  align-items: flex-end;
+}
+
+.message-self-left .message-info {
+  flex-direction: row;
+}
+
+.message-other-right .message-info {
+  flex-direction: row-reverse;
+}
+
+.message-self-left .timestamp {
+  margin-left: 5px;
+  margin-right: 0;
+}
+
+.message-other-right .timestamp {
+  margin-right: 5px;
+  margin-left: 0;
 }
 </style>
