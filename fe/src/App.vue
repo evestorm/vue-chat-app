@@ -23,7 +23,7 @@ const previewUrlList = ref([]) // 图片预览列表
 const previewInitialIndex = ref(0) // 图片预览初始索引
 
 // 消息显示位置配置
-const selfMessagePosition = ref('left') // 'left' 或 'right'
+const selfMessagePosition = ref('right') // 'left' 或 'right'
 
 // 常量定义
 const IMAGE_HEIGHT = 200 // 聊天消息中图片的固定高度（像素）
